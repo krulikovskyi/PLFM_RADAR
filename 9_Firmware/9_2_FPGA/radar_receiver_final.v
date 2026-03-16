@@ -170,6 +170,7 @@ ddc_input_interface ddc_if (
 );
 
 // 3. Dual Chirp Memory Loader
+wire [9:0] sample_addr_from_chain;
 
 chirp_memory_loader_param chirp_mem (
     .clk(clk),
@@ -219,7 +220,6 @@ assign short_chirp_real = delayed_ref_i;
 assign short_chirp_imag = delayed_ref_q;
 
 // 5. Dual Chirp Matched Filter
-wire [9:0] sample_addr_from_chain; 
 
 wire signed [15:0] range_profile_i;
 wire signed [15:0] range_profile_q;

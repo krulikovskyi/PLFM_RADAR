@@ -81,6 +81,7 @@ reg [2:0] current_segment;        // 0-3
 reg [2:0] total_segments;
 reg segment_done;
 reg chirp_complete;
+reg saw_chain_output;             // Flag: chain started producing output
 
 // Microcontroller sync detection
 reg mc_new_chirp_prev, mc_new_elevation_prev, mc_new_azimuth_prev;
@@ -140,6 +141,7 @@ always @(posedge clk or negedge reset_n) begin
         status <= 0;
         chirp_samples_collected <= 0;
         chirp_complete <= 0;
+        saw_chain_output <= 0;
         fft_input_valid <= 0;
         fft_start <= 0;
     end else begin
@@ -158,6 +160,7 @@ always @(posedge clk or negedge reset_n) begin
                 segment_done <= 0;
                 chirp_samples_collected <= 0;
                 chirp_complete <= 0;
+                saw_chain_output <= 0;
                 
                 // Wait for chirp start from microcontroller
                 if (chirp_start_pulse) begin
@@ -296,6 +299,7 @@ always @(posedge clk or negedge reset_n) begin
                     mem_request <= 0;
                     buffer_processing <= 0;
                     buffer_has_data <= 0;
+                    saw_chain_output <= 0;
                     state <= ST_WAIT_FFT;  // CRITICAL: Wait for FFT completion
                     
                     `ifdef SIMULATION
@@ -306,11 +310,21 @@ always @(posedge clk or negedge reset_n) begin
             end
             
             ST_WAIT_FFT: begin
-                // Wait for the processing chain to complete (2159 cycles latency)
+                // Wait for the processing chain to complete ALL outputs.
+                // The chain streams 1024 samples (fft_pc_valid=1 for 1024 clocks),
+                // then transitions to ST_DONE (9) -> ST_IDLE (0).
+                // We track when output starts (saw_chain_output) and only
+                // proceed once the chain returns to idle after outputting.
                 if (fft_pc_valid) begin
+                    saw_chain_output <= 1;
+                end
+                
+                if (saw_chain_output && fft_chain_state == 4'd0) begin
+                    // Chain has returned to idle after completing all output
+                    saw_chain_output <= 0;
                     state <= ST_OUTPUT;
                     `ifdef SIMULATION
-                    $display("[MULTI_SEG_FIXED] FFT processing complete for segment %d",
+                    $display("[MULTI_SEG_FIXED] Chain complete for segment %d, entering ST_OUTPUT",
                              current_segment);
                     `endif
                 end
